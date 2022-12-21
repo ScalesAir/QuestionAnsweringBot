@@ -1,3 +1,5 @@
+import asyncio
+
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Text
@@ -5,7 +7,7 @@ from aiogram import types, Dispatcher
 from functions.message_func import answer_msg, reply_msg, send_msg, edit_msg
 from functions.other_func import get_date_time, get_user_name
 from data_base.sqlite_bd import find_column, \
-    sql_add_question, delete_bd_msg, max_rowid, set_bd_update
+    sql_add_question, delete_bd_msg, max_rowid, set_bd_update, sql_read
 from keyboards.client_kb import create_button_reply, create_button_inline
 from create_bot import bot, dp
 # from question_lifecycle.response_message import start_response_message
@@ -15,7 +17,10 @@ import random
 logger = logging.getLogger("app.question_lifecycle.submit_request")
 
 __all__ = ['registration_handlers_ask_question',
-           'entering_a_question']
+           'entering_a_question',
+           'dialog_question',
+           'FSMNew_question',
+           'load_text']
 
 
 # Класс FSM отправки вопроса на нужную службу
@@ -23,6 +28,21 @@ class FSMNew_question(StatesGroup):
     text = State()
     send = State()
     media = State()
+
+
+async def dialog_question(callback: types.CallbackQuery):
+    send = callback.data.split(':')[1]
+    callback.message.message_id = callback.data.split(':')[2]
+    if send == 'yes':
+        question_id = int(await max_rowid()) + 1
+        await FSMNew_question.text.set()
+        state = Dispatcher.get_current().current_state()
+        async with state.proxy() as data:
+            data['question_id'] = question_id
+            data['user_id'] = callback.message.chat.id
+        await load_text(callback.message, state)
+    await callback.message.delete()
+    await callback.answer()
 
 
 async def entering_a_question(message: types.Message):
@@ -38,8 +58,8 @@ async def entering_a_question(message: types.Message):
         data['user_id'] = message.from_user.id
 
 
-async def waiting_for_a_question(message: types.Message, state: FSMContext):
-    user_data = await state.get_data()
+# async def waiting_for_a_question(message: types.Message, state: FSMContext):
+#     user_data = await state.get_data()
 
 
 async def create_media_group(photos, videos):
@@ -67,7 +87,7 @@ async def create_media_group(photos, videos):
     # await bot.send_media_group(message.from_user.id, media)
 
 
-async def create_document_group(documents, caption=''):
+async def create_document_group(documents):
     doc = types.MediaGroup()
     if documents:
         for data in documents:
@@ -106,14 +126,16 @@ async def bd_add_question(message: types.Message, state: FSMContext):
                            str(user_data.get('videos')),
                            str(user_data.get('documents')),
                            await get_date_time())
-    users = [541261735]
+    users = list()
+    moderators = await sql_read('moderator')
+    for moderator in moderators:
+        users.append(moderator[0])
     await set_bd_update('questions', 'question_id', rowid, 'time_end', '')
     text = f"Вам поступила заявка №{rowid} от {await get_user_name(message, user_data.get('user_id'))}:" \
            f"\n{user_data.get('text')}"
     media = None
     doc = None
 
-    print(type(user_data.get('photos')), user_data.get('photos'))
     if user_data.get('photos') or user_data.get('videos'):
         media = await create_media_group(user_data.get('photos'), user_data.get('videos'))
 
@@ -175,7 +197,7 @@ async def cm_edit_text(callback: types.CallbackQuery, state: FSMContext):
     if user_data.get('documents'):
         user_data.pop('documents')
     await state.set_data(user_data)
-    user_data = await state.get_data()
+    # user_data = await state.get_data()
     await FSMNew_question.text.set()
     await edit_msg(callback.message.chat.id, callback.message.message_id, f'Вы решили изменить текст вопроса')
     kb = await create_button_reply(2, text='Отмена', text1='Назад')
@@ -240,6 +262,8 @@ async def sent_message(callback: types.CallbackQuery, state: FSMContext):
     await edit_msg(callback.message.chat.id, callback.message.message_id, 'Ваш вопрос отправлен!')
     await bd_add_question(callback.message, state)
     await state.finish()
+    # TODO разобраться почему иногда отправляются несколько сообщений. Поможет ли решить вопрос sleep
+    await asyncio.sleep(3)
 
 
 # async def caption_text(message, user_data, state: FSMContext):
@@ -310,11 +334,9 @@ async def cm_cancel(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query_handler(Text(startswith='ok:'))
 async def call_ok(callback: types.CallbackQuery):
-    print('dfsdf')
     question_id = int(callback.data.split(':')[1])
     user_id = int(callback.data.split(':')[2])
     temp = await find_column('delete_msg', 'question_id', question_id)
-    print(temp)
     msg = temp[0][1].split('|')
     user_name = await get_user_name(callback.message, id_user=callback.message.chat.id)
     logger.info(f'{await get_date_time()} - {user_name} принял заявку №{question_id}')
@@ -324,7 +346,6 @@ async def call_ok(callback: types.CallbackQuery):
             text = f'{user_name} принял заявку №{question_id}'
             await edit_msg(res[0], res[1], text)
         else:
-            print(data)
             kb = create_button_inline(2, t1='Ответить на вопрос', с2=f'work:{question_id}:{user_id}:{res[1]}')
             # kb = create_button_inline(2, t1='Отработал', с2=f'work:{question_id}:{user_id}:{res[1]}',
             #                           t2='Отказать', c2=f'rej:{question_id}:{user_id}:{res[1]}')

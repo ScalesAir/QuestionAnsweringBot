@@ -34,7 +34,7 @@ async def send_msg(message, text, rm=ReplyKeyboardRemove(), spec_chat_id=''):
         else:
             msg = await bot.send_message(message.chat.id, text, parse_mode='html', reply_markup=rm)
         # print(msg)
-    except exceptions.CantInitiateConversation:  # TODO Проверить
+    except exceptions.CantInitiateConversation:
         logger.warning(
             f'Бот не может начать разговор с пользователем {message.from_user.first_name}({message.from_user.id})')
         await bot.send_message(message.chat.id,
@@ -67,7 +67,7 @@ async def answer_msg(message, text, rm=ReplyKeyboardRemove()):
     """
     try:
         await message.answer(text, parse_mode='html', reply_markup=rm)
-    except exceptions.CantInitiateConversation:  # TODO Проверить
+    except exceptions.CantInitiateConversation:
         logger.warning(
             f'Бот не может начать разговор с пользователем {message.from_user.first_name}({message.from_user.id})')
         await bot.send_message(message.chat.id,
@@ -95,7 +95,7 @@ async def reply_msg(message, text, rm=ReplyKeyboardRemove()):
     """
     try:
         await message.reply(text, parse_mode='html', reply_markup=rm)
-    except exceptions.CantInitiateConversation:  # TODO Проверить
+    except exceptions.CantInitiateConversation:
         logger.warning(
             f'Бот не может начать разговор с пользователем {message.from_user.first_name}({message.from_user.id})')
         await bot.send_message(message.chat.id,

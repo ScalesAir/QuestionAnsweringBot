@@ -54,7 +54,7 @@ async def create_button_reply(row_width, *btn, text='', text1=''):
     :return:
     """
 
-    kb = ReplyKeyboardMarkup(row_width=row_width, resize_keyboard=True, selective=True)
+    kb = ReplyKeyboardMarkup(row_width=row_width, resize_keyboard=True, selective=False, one_time_keyboard=False)
     if text != '' and text1 == '':
         kb.add(text)
     if text == '' and text1 != '':

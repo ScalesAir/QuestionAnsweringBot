@@ -86,7 +86,7 @@ async def send_answer(callback: types.CallbackQuery):
     user_id = int(callback.data.split(':')[3])
     result = callback.data.split(':')[4]
     temp = await find_column('questions', 'question_id', question_id)
-    text = temp[0][10]
+    text = temp[0][8]
     if send == 'y':
         await edit_msg(callback.message.chat.id, callback.message.message_id,
                        f'Ответ по заявке №{question_id} отправлен '
@@ -140,12 +140,12 @@ async def call_answer(callback: types.CallbackQuery):
         await set_bd_update('questions', 'question_id', question_id, 'time_end', await get_date_time())
         logger.info(
             f'{await get_date_time()} - {await get_user_name(callback.message, id_user=callback.message.chat.id)} '
-            f'закрыл отрицательный ответ по заявке №{question_id}')
+            f'устроил ответ по заявке №{question_id}')
         await edit_msg(callback.message.chat.id, callback.message.message_id,
                        f'Ваша заявка №{question_id} закрыта')
         kb = await create_grade_kb(question_id)
         await delete_line_bd_msg(question_id)
-        await send_msg(callback.message, f'Оцените ответ', kb, spec_chat_id=callback.message.chat.id)
+        await send_msg(callback.message, f'Оцените пожалуйста ответ', kb, spec_chat_id=callback.message.chat.id)
 
     if answer == 'no':
         edit_text = callback.message.text.replace('Вас устраивает ответ?', 'Ответ Вас не устроил')
@@ -163,12 +163,12 @@ async def response_to_negative(message: types.Message, state: FSMContext):
         question_id = data['question_id']
         user_id = data['user_id']
         temp = await find_column('questions', 'question_id', question_id)
-        text = temp[0][10]
+        text = temp[0][8]
     moderators = await check_moderator()
     await delete_line_bd_msg(question_id)
     msg_id = list()
-    print(user_id)
     await send_msg(message, 'Ваш вопрос отправлен повторно!')
+    # TODO разобраться почему не используется moderator
     for moderator in moderators:
         kb = create_button_inline(2, t1='Принять в работу',
                                   c1=f"ok:{question_id}:{message.from_user.id}")
@@ -193,7 +193,7 @@ async def call_grade(callback: types.CallbackQuery):
                    f'Заявка №{question_id} закрыта.\nВаша оценка: {grade}')
     await set_bd_update('questions', 'question_id', question_id, 'grade', grade)
     temp = await find_column('questions', 'question_id', question_id)
-    responsible_id = temp[0][9]
+    responsible_id = temp[0][7]
     await send_msg(callback.message, f'Ваш ответ удовлетворил '
                                      f'{await get_user_name(callback.message, id_user=callback.message.chat.id)} '
                                      f'с оценкой {str(grade)}\n'

@@ -17,7 +17,7 @@ async def startup(_):
     :param _:
     :return:
     """
-    logger.info(f'{await get_date_time()} Бот запущен!')
+    logger.info(f'{await get_date_time()} Бот QuestionAnsweringBot запущен!')
     # print(f'{await get_date_time()} Бот запущен!')
     sql_start()
 
@@ -45,6 +45,6 @@ if __name__ == '__main__':
     try:
         executor.start_polling(dp, skip_updates=True, on_startup=startup, on_shutdown=shutdown, timeout=30000)
     except ConnectionError as err:  # Не удается подключиться к хосту api.telegram.org:443
-        print(f'Не удается подключиться к хосту api.telegram.org:443 ssl:default [Превышен таймаут семафора]')
-        print(repr(err))
+        # print(f'Не удается подключиться к хосту api.telegram.org:443 ssl:default [Превышен таймаут семафора]')
+        # print(repr(err))
         logger.error(err)

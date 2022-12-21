@@ -8,7 +8,7 @@ async def get_date_time():
 
 async def data_from_database_row(database_row, row):
     """
-    Функция возвращает тест под индексом row из списка database_row
+    Функция возвращает текст под индексом row из списка database_row
     применяется для получения id, имени пользователя после функции sqlite_db.find_column()
     :param database_row:
     :param row:

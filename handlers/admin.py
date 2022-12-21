@@ -5,7 +5,7 @@ from create_bot import bot
 from data_base.sqlite_bd import sql_read, find_column, find_no_end_questions, delete_bd_msg, delete_line_bd_msg
 from functions.other_func import get_user_name, get_date_time
 from keyboards.client_kb import create_button_inline
-from functions.message_func import send_msg, edit_msg
+from functions.message_func import send_msg, edit_msg, answer_msg
 from logs import logging
 
 logger = logging.getLogger("app.handlers.admin")
@@ -56,7 +56,8 @@ async def create_media_group(photos, videos):
     # await bot.send_media_group(message.from_user.id, media)
 
 
-async def create_document_group(documents, caption=''):
+# TODO убрать повторяющейся код
+async def create_document_group(documents):
     doc = types.MediaGroup()
     if documents:
         for data in documents:
@@ -73,34 +74,44 @@ async def create_document_group(documents, caption=''):
 
 async def checking_questions(message: types.Message):
     try:
+        users = list()
+        moderators = await check_moderator()
+        for moderator in moderators:
+            users.append(moderator[0])
+
+        if message.from_user.id not in users:
+            await answer_msg(message, 'Извините, у Вас нет доступа к этой команде')
+            return
+
         del_msg = await find_no_end_questions()
         user_id = ''
-        question_id=''
-        print(del_msg)
+        # question_id = ''
+        # TODO Чтобы учитывались вопросы которые принял кто-то, и всем выводилось сообщение
+        #  что тот то, не ответил на вопрос такой-то
+
+        check_message = False
         for index in del_msg:
+            if len(index[1]) < 8:
+                logger.warning('Некорректные данные в ячейке для удаления сообщений')
+                continue
+            check_message = True
             msg_id = list()
             question_id = index[0]
             questions = await find_column('questions', 'question_id', question_id)
             msg = index[1].split('|')
-            print(questions)
             for question in questions:
 
                 user_id = question[1]
-                print('user_id', user_id)
-                text = question[4]
+                text = question[2]
                 edit_text = f"Не отвеченная заявка №{question_id} от " \
                             f"{await get_user_name(message, user_id)}:" \
                             f"\n{text}"
-                print(text)
-                photo = list().append(question[5])
-                video = list().append(question[6])
-                document = list().append(question[7])
-                print(msg)
+                photo = list().append(question[3])
+                video = list().append(question[4])
+                document = list().append(question[5])
                 for data in msg:
                     res = data.split(',')
                     responsible_id = res[0]
-                    print(responsible_id)
-                    print(text)
                     await edit_msg(res[0], res[1], f'Данная заявка повторена {await get_date_time()}')
                     media = None
                     doc = None
@@ -134,6 +145,8 @@ async def checking_questions(message: types.Message):
                 await delete_bd_msg(int(question_id), '|'.join(msg_id))
             logger.info(
                 f"{await get_date_time()} - {await get_user_name(message, user_id)} создал заявку №{question_id}")
+        if not check_message:
+            await answer_msg(message, f'{await get_user_name(message)} неотвеченных вопросов нет')
     except Exception as err:
         logger.error(err)
 
