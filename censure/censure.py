@@ -5,7 +5,7 @@ __all__ = ['censure_filter']
 
 sensitiveness = 0.32
 
-from datetime import datetime
+# from datetime import datetime
 
 # words = ["банан", "помидор"]
 
