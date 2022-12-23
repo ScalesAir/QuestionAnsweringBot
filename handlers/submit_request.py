@@ -114,18 +114,38 @@ async def create_document_group(documents):
 #         await FSMNew_question.category.set()
 
 
+async def bd_add_bot_question(message: types.Message, answer: str):
+    # await FSMNew_question.send.set()
+    # state = Dispatcher.get_current().current_state()
+    user_id = message.from_user.id
+    rowid = int(await max_rowid()) + 1
+    await sql_add_question(rowid,
+                           int(user_id),
+                           str(message.text),
+                           str(None),
+                           str(None),
+                           str(None),
+                           str(await get_date_time()))
+    await set_bd_update('questions', 'question_id', rowid, 'responsible_id', str('bot'))
+    await set_bd_update('questions', 'question_id', rowid, 'answer', answer)
+    await set_bd_update('questions', 'question_id', rowid, 'acceptance_time', str(await get_date_time()))
+    kb = create_button_inline(2, t1='Да', с1=f'answer:yes:{rowid}:bot',
+                              t2='Нет', c2=f'answer:no:{rowid}:bot')
+    await answer_msg(message, f'Был ли мой ответ полезным?', kb)
+
+
 async def bd_add_question(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
     rowid = int(await max_rowid()) + 1
     async with state.proxy() as data:
         data[rowid] = rowid
     await sql_add_question(rowid,
-                           user_data.get('user_id'),
-                           user_data.get('text'),
+                           int(user_data.get('user_id')),
+                           str(user_data.get('text')),
                            str(user_data.get('photos')),
                            str(user_data.get('videos')),
                            str(user_data.get('documents')),
-                           await get_date_time())
+                           str(await get_date_time()))
     users = list()
     moderators = await sql_read('moderator')
     for moderator in moderators:
@@ -208,7 +228,7 @@ async def cm_edit_text(callback: types.CallbackQuery, state: FSMContext):
 async def load_text(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['text'] = message.text
-
+        data['user_id'] = message.from_user.id
     user_data = await state.get_data()
     await FSMNew_question.send.set()
     await state.set_data(user_data)

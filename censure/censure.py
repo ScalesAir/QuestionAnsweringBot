@@ -81,12 +81,13 @@ async def remake_transcript(word):
 async def text_match(word):
     c_text = await clear_text(word)
     for filthy_language in words:
-        # print(filthy_language)
         difference = lev(c_text, filthy_language) / len(filthy_language)
-        if c_text.find(filthy_language) != -1:
-            return True
+        # if c_text.find(filthy_language) != -1:
+        #     print(filthy_language)
+        #     return True
+
         if difference <= sensitiveness:
-            # print(filthy_language)
+            print(filthy_language)
             return True
     return False
 

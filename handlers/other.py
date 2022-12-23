@@ -1,5 +1,6 @@
 import asyncio
 
+import handlers.submit_request
 from create_bot import bot, dialogflow, session_client, session, language_code
 # import json # Работа с json файлами, тут нужен для фильтра мата
 # import string # Для выдергивания спец символом таких как '!@#$', нужно для определения маскировки мата
@@ -64,9 +65,10 @@ async def send_msg_moderator(message: types.Message, text: str):
     question_id = int(await max_rowid()) + 1
     await FSMNew_question.text.set()
     state = Dispatcher.get_current().current_state()
+    user_id = message.from_user.id
     async with state.proxy() as data:
         data['question_id'] = question_id
-        data['user_id'] = message.from_user.id,
+        data['user_id'] = user_id,
     message.text = text
     await load_text(message, state)
 
@@ -119,9 +121,7 @@ async def send_text_private(message: types.Message):
     response = session_client.detect_intent(  # Ответ бота
         session=session, query_input=query_input)
 
-    if '/arranged_an_answer"' in str(response):
-        print('response', response)
-    # TODO Сделать возможность пользователю подтвердить что его устроил ответ.
+
     # kb = create_button_inline(2, t1='Да', с1=f'b_ans:yes:{question_id}:{callback.message.chat.id}',
     #                           t2='Нет', c2=f'b_ans:no:{question_id}:{callback.message.chat.id}')
     # await send_msg(callback.message, f'Был ли мой ответ полезным?', kb, spec_chat_id=user_id)
@@ -130,6 +130,11 @@ async def send_text_private(message: types.Message):
     if response.query_result.fulfillment_text:  # Если ответ имеется
         await bot.send_message(message.from_user.id,
                                response.query_result.fulfillment_text)  # Отправляем его пользователю
+        # TODO Сделать возможность пользователю подтвердить что его устроил ответ.
+        if '/arranged_an_answer"' in str(response):
+            await handlers.submit_request.bd_add_bot_question(message, response.query_result.fulfillment_text)
+            # print('response', response)
+
         # print(response)
     else:  # В обратном случае
         filter_stars = text.replace('*', '').replace(' ', '')

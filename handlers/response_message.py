@@ -135,7 +135,7 @@ async def send_answer(callback: types.CallbackQuery):
 async def call_answer(callback: types.CallbackQuery):
     answer = callback.data.split(':')[1]
     question_id = int(callback.data.split(':')[2])
-    user_id = int(callback.data.split(':')[3])
+    responsible_id = callback.data.split(':')[3]
     if answer == 'yes':
         await set_bd_update('questions', 'question_id', question_id, 'time_end', await get_date_time())
         logger.info(
@@ -154,33 +154,37 @@ async def call_answer(callback: types.CallbackQuery):
         state = Dispatcher.get_current().current_state()
         async with state.proxy() as data:
             data['question_id'] = question_id
-            data['user_id'] = user_id
+            data['responsible_id'] = responsible_id
         await send_msg(callback.message, 'Напишите по какой причине Вас, не устраивает ответ.')
 
 
 async def response_to_negative(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         question_id = data['question_id']
-        user_id = data['user_id']
-        temp = await find_column('questions', 'question_id', question_id)
-        text = temp[0][8]
+        responsible_id = data['responsible_id']
+    questions_data = await find_column('questions', 'question_id', question_id)
+    question = questions_data[0][2]
+    answer = questions_data[0][8]
     moderators = await check_moderator()
     await delete_line_bd_msg(question_id)
     msg_id = list()
+    responsible = 'Бота'
+    if responsible_id != 'bot':
+        responsible = await get_user_name(message, responsible_id)
     await send_msg(message, 'Ваш вопрос отправлен повторно!')
-    # TODO разобраться почему не используется moderator
     for moderator in moderators:
         kb = create_button_inline(2, t1='Принять в работу',
                                   c1=f"ok:{question_id}:{message.from_user.id}")
-        await send_msg(message, f'<b>Пользователя {await get_user_name(message)}  '
-                                f'не удовлетворил ответ {await get_user_name(message, user_id)}\n'
-                                f'Текст отказа:</b>\n<i>{text}</i>\n'
-                                f'<b>Причина:</b>\n<i>{message.text}</i>', spec_chat_id=user_id)
-        msg = await send_msg(message, 'Принять заявку?', spec_chat_id=user_id, rm=kb)
+        await send_msg(message, f'<b>Пользователя {await get_user_name(message)} '
+                                f'не удовлетворил ответ от {responsible}</b>\n'
+                                f'<b>Вопрос:</b><i>{question}</i>\n'
+                                f'<b>Ответ: </b><i>{answer}</i>\n'
+                                f'<b>Причина:</b>\n<i>{message.text}</i>', spec_chat_id=moderator[0])
+        msg = await send_msg(message, 'Принять заявку?', spec_chat_id=moderator[0], rm=kb)
         if msg:
-            msg_id.append(str(user_id) + ',' + str(msg.message_id))
+            msg_id.append(str(moderator[0]) + ',' + str(msg.message_id))
         else:
-            logger.warning(f'{await get_user_name(message, user_id)} заблокировал пользователя')
+            logger.warning(f'{await get_user_name(message, int(moderator[0]))} заблокировал пользователя')
     await delete_bd_msg(question_id, '|'.join(msg_id))
     await state.finish()
 
@@ -194,10 +198,13 @@ async def call_grade(callback: types.CallbackQuery):
     await set_bd_update('questions', 'question_id', question_id, 'grade', grade)
     temp = await find_column('questions', 'question_id', question_id)
     responsible_id = temp[0][7]
-    await send_msg(callback.message, f'Ваш ответ удовлетворил '
-                                     f'{await get_user_name(callback.message, id_user=callback.message.chat.id)} '
-                                     f'с оценкой {str(grade)}\n'
-                                     f'Заявка №{question_id} закрыта.', spec_chat_id=responsible_id)
+    if responsible_id == 'bot':
+        logger.info(f'{await get_user_name(callback.message, callback.message.chat.id)} устроил ответ БОТа')
+    else:
+        await send_msg(callback.message, f'Ваш ответ удовлетворил '
+                                         f'{await get_user_name(callback.message, id_user=callback.message.chat.id)} '
+                                         f'с оценкой {str(grade)}\n'
+                                         f'Заявка №{question_id} закрыта.', spec_chat_id=responsible_id)
 
     await callback.answer()
 
