@@ -25,40 +25,61 @@ class FSMNew_answer(StatesGroup):
 
 @dp.callback_query_handler(Text(startswith='work:'), state=None)
 async def call_worked(callback: types.CallbackQuery):
-    question_id = int(callback.data.split(':')[1])
-    user_id = int(callback.data.split(':')[2])
-    msg_id = int(callback.data.split(':')[3])
-    await FSMNew_answer.answer.set()
-    state = Dispatcher.get_current().current_state()
-    await edit_msg(callback.message.chat.id, msg_id, f'Вы приняли заявку №{question_id}')
-    async with state.proxy() as data:
-        data['user_id'] = user_id
-        data['question_id'] = question_id
-        data['result'] = 'y'
+    """
+    Если нажата кнопка "ответить на вопрос" Запускает FMS ожидания ответа на вопрос.
+    которая создается в функции "submit_request/call_ok".
+    Срабатывает при callback "work:id вопроса:id пользователя:id сообщения"
+    :param callback: ответ types.CallbackQuery
+    :return: None
+    """
+    # TODO проверить запас символов при ответе.
+    #  Возможно что служебная информация будет слишком большая, что вызовет критическую ошибку.
+    # TODO Проверить нужен ли result, использовался когда был выбор ответить или отклонить.
+    try:
+        question_id = int(callback.data.split(':')[1])
+        user_id = int(callback.data.split(':')[2])
+        msg_id = int(callback.data.split(':')[3])
+        await FSMNew_answer.answer.set()
+        state = Dispatcher.get_current().current_state()
+        await edit_msg(callback.message.chat.id, msg_id, f'Вы приняли заявку №{question_id}')
+        async with state.proxy() as data:
+            data['user_id'] = user_id
+            data['question_id'] = question_id
+            data['result'] = 'y'
 
-    # await callback.answer(f'Ответ по заявке №{question_id} отправлен', show_alert=True)
-    # await FSMNew_question.question.set()
-    await send_msg(callback.message, f'Напишите ответ на заявку {question_id}',
-                   spec_chat_id=callback.message.chat.id)
-
-
-@dp.callback_query_handler(Text(startswith='rej:'), state=None)
-async def call_reject(callback: types.CallbackQuery):
-    question_id = int(callback.data.split(':')[1])
-    user_id = int(callback.data.split(':')[2])
-    msg_id = int(callback.data.split(':')[3])
-    await FSMNew_answer.answer.set()
-    state = Dispatcher.get_current().current_state()
-    await edit_msg(callback.message.chat.id, msg_id, f'Вы отказали заявку №{question_id}')
-    async with state.proxy() as data:
-        data['user_id'] = user_id
-        data['question_id'] = question_id
-        data['result'] = 'n'
-    await send_msg(callback.message, f'Напишите причину отказа по заявке №{question_id}',
-                   spec_chat_id=callback.message.chat.id)
+        # await callback.answer(f'Ответ по заявке №{question_id} отправлен', show_alert=True)
+        # await FSMNew_question.question.set()
+        await send_msg(callback.message, f'Напишите ответ на заявку {question_id}',
+                       spec_chat_id=callback.message.chat.id)
+    except Exception as error:
+        logger.critical(error)
 
 
-async def create_grade_kb(question_id):
+# @dp.callback_query_handler(Text(startswith='rej:'), state=None)
+# async def call_reject(callback: types.CallbackQuery):
+#     question_id = int(callback.data.split(':')[1])
+#     user_id = int(callback.data.split(':')[2])
+#     msg_id = int(callback.data.split(':')[3])
+#     await FSMNew_answer.answer.set()
+#     state = Dispatcher.get_current().current_state()
+#     await edit_msg(callback.message.chat.id, msg_id, f'Вы отказали заявку №{question_id}')
+#     async with state.proxy() as data:
+#         data['user_id'] = user_id
+#         data['question_id'] = question_id
+#         data['result'] = 'n'
+#     await send_msg(callback.message, f'Напишите причину отказа по заявке №{question_id}',
+#                    spec_chat_id=callback.message.chat.id)
+
+
+async def create_grade_kb(question_id: int):
+    """
+    Функция возвращает объект kb класса "aiogram.types.inline_keyboard.InlineKeyboardMarkup".
+    Содержащий кнопки для оценки ответа на вопрос. от 1 до 5 в одну линию.
+    При нажатии на кнопку будет отправлен callback  grade:n - где n: оценка.
+    Ответ будет обрабатываться функцией call_grade
+    :param question_id: id вопроса
+    :return:
+    """
     kb = create_button_inline(5, t1='1', c1=f'grade:1:{question_id}',
                               t2='2', c2=f'grade:2:{question_id}',
                               t3='3', c3=f'grade:3:{question_id}',
@@ -68,67 +89,87 @@ async def create_grade_kb(question_id):
 
 
 async def answer_to_question(message: types.Message, state: FSMContext):
-    async with state.proxy() as data:
-        question_id = data['question_id']
-        user_id = data['user_id']
-        result = data['result']
-    await state.finish()
-    await set_bd_update('questions', 'question_id', question_id, 'answer', message.text)
-    kb = create_button_inline(2, t1='Да', с1=f'snd:y:{question_id}:{user_id}:{result}',
-                              t2='Изменить текст', c2=f'snd:n:{question_id}:{user_id}:{result}')
-    await reply_msg(message, 'Оправить ответ?', kb)
+    """
+    (Вызывается в приватном чате. Если FSM равен "FSMNew_answer.answer".)
+    Функция завершает FSM "FSMNew_answer.answer".
+    И отправляет исполнителю сообщение с двумя кнопками "Да", "Изменить текст".
+    Каждая кнопка содержит в себе:
+    тригер snd:[y,n](где y-отправить, n-изменить текст):индекс вопроса:id пользователя:результат с функции call_worked
+    Дальше результат нажатия кнопок будет виден в "send_answer"
+    :param message: Сообщение от пользователя в телеграмм types.Message
+    :param state: Состояние FSM "FSMNew_answer.answer"
+    :return:
+    """
+    try:
+        async with state.proxy() as data:
+            question_id = data['question_id']
+            user_id = data['user_id']
+            result = data['result']
+        await state.finish()
+        await set_bd_update('questions', 'question_id', question_id, 'answer', message.text)
+        kb = create_button_inline(2, t1='Да', с1=f'snd:y:{question_id}:{user_id}:{result}',
+                                  t2='Изменить текст', c2=f'snd:n:{question_id}:{user_id}:{result}')
+        await reply_msg(message, 'Оправить ответ?', kb)
+    except Exception as error:
+        logger.critical(error)
 
 
 @dp.callback_query_handler(Text(startswith='snd:'), state=None)
 async def send_answer(callback: types.CallbackQuery):
-    send = callback.data.split(':')[1]
-    question_id = int(callback.data.split(':')[2])
-    user_id = int(callback.data.split(':')[3])
-    result = callback.data.split(':')[4]
-    temp = await find_column('questions', 'question_id', question_id)
-    text = temp[0][8]
-    if send == 'y':
-        await edit_msg(callback.message.chat.id, callback.message.message_id,
-                       f'Ответ по заявке №{question_id} отправлен '
-                       f'{await get_user_name(callback.message, user_id)}')
-        if result == 'y':
-            await set_bd_update('questions', 'question_id', question_id, 'time_end', await get_date_time())
-            logger.info(f'{await get_date_time()} - {await get_user_name(callback.message, callback.message.chat.id)} '
-                        f'ответил по заявке №{question_id}')
-            await send_msg(callback.message,
-                           f'{await get_user_name(callback.message, callback.message.chat.id)} '
-                           f'ответил по заявке №{question_id}:'
-                           f'\n{text}', spec_chat_id=user_id)
-            # await state.finish()
-            # await send_msg(callback.message, f'<b>Ответ по заявке №{question_id}↔ отправлен '
-            #                                  f'{await get_user_name(callback.message, user_id)}</b>')
-            await delete_line_bd_msg(question_id)
-            kb = create_button_inline(2, t1='Да', с1=f'answer:yes:{question_id}:{callback.message.chat.id}',
-                                      t2='Нет', c2=f'answer:no:{question_id}:{callback.message.chat.id}')
-            await send_msg(callback.message, f'Был ли мой ответ полезным?', kb, spec_chat_id=user_id)
-            # kb = await create_grade_kb(question_id)
-            # await send_msg(callback.message, f'Оцените ответ', kb, spec_chat_id=user_id)
-        if result == 'n':
-            await send_msg(callback.message,
-                           f'{await get_user_name(callback.message, callback.message.chat.id)} '
-                           f'отказал заявку №{question_id} с примечанием:'
-                           f'\n{text}', spec_chat_id=user_id)
-            kb = create_button_inline(2, t1='Да', с1=f'answer:yes:{question_id}:{callback.message.chat.id}',
-                                      t2='Нет', c2=f'answer:no:{question_id}:{callback.message.chat.id}')
-            logger.info(f'{await get_date_time()} - {await get_user_name(callback.message, callback.message.chat.id)}'
-                        f' отказал заявку №{question_id}')
+    # Длина служебной информации callback.data 64 символа
+    try:
+        send = callback.data.split(':')[1]
+        question_id = int(callback.data.split(':')[2])
+        user_id = int(callback.data.split(':')[3])
+        result = callback.data.split(':')[4]
+        questions_data = await find_column('questions', 'question_id', question_id)
+        text = questions_data[0][8]
+        if send == 'y':
+            await edit_msg(callback.message.chat.id, callback.message.message_id,
+                           f'Ответ по заявке №{question_id} отправлен '
+                           f'{await get_user_name(callback.message, user_id)}')
+            if result == 'y':
+                await set_bd_update('questions', 'question_id', question_id, 'time_end', await get_date_time())
+                logger.info(
+                    f'{await get_date_time()} - {await get_user_name(callback.message, callback.message.chat.id)} '
+                    f'ответил по заявке №{question_id}')
+                await send_msg(callback.message,
+                               f'{await get_user_name(callback.message, callback.message.chat.id)} '
+                               f'ответил по заявке №{question_id}:'
+                               f'\n{text}', spec_chat_id=user_id)
+                # await state.finish()
+                # await send_msg(callback.message, f'<b>Ответ по заявке №{question_id}↔ отправлен '
+                #                                  f'{await get_user_name(callback.message, user_id)}</b>')
+                await delete_line_bd_msg(question_id)
+                kb = create_button_inline(2, t1='Да', с1=f'answer:yes:{question_id}:{callback.message.chat.id}',
+                                          t2='Нет', c2=f'answer:no:{question_id}:{callback.message.chat.id}')
+                await send_msg(callback.message, f'Был ли мой ответ полезным?', kb, spec_chat_id=user_id)
+                # kb = await create_grade_kb(question_id)
+                # await send_msg(callback.message, f'Оцените ответ', kb, spec_chat_id=user_id)
+            if result == 'n':
+                await send_msg(callback.message,
+                               f'{await get_user_name(callback.message, callback.message.chat.id)} '
+                               f'отказал заявку №{question_id} с примечанием:'
+                               f'\n{text}', spec_chat_id=user_id)
+                kb = create_button_inline(2, t1='Да', с1=f'answer:yes:{question_id}:{callback.message.chat.id}',
+                                          t2='Нет', c2=f'answer:no:{question_id}:{callback.message.chat.id}')
+                logger.info(
+                    f'{await get_date_time()} - {await get_user_name(callback.message, callback.message.chat.id)}'
+                    f' отказал заявку №{question_id}')
 
-            await send_msg(callback.message, f'Вас устраивает ответ?', kb, spec_chat_id=user_id)
-    if send == 'n':
-        await edit_msg(callback.message.chat.id, callback.message.message_id,
-                       f'Вы решили изменить текст сообщения по заявке №{question_id}')
-        await FSMNew_answer.answer.set()
-        state = Dispatcher.get_current().current_state()
-        await send_msg(callback.message, 'Наберите новый текст')
-        async with state.proxy() as data:
-            data['user_id'] = user_id
-            data['question_id'] = question_id
-            data['result'] = result
+                await send_msg(callback.message, f'Вас устраивает ответ?', kb, spec_chat_id=user_id)
+        if send == 'n':
+            await edit_msg(callback.message.chat.id, callback.message.message_id,
+                           f'Вы решили изменить текст сообщения по заявке №{question_id}')
+            await FSMNew_answer.answer.set()
+            state = Dispatcher.get_current().current_state()
+            await send_msg(callback.message, 'Наберите новый текст', spec_chat_id='')
+            async with state.proxy() as data:
+                data['user_id'] = user_id
+                data['question_id'] = question_id
+                data['result'] = result
+    except Exception as error:
+        logger.critical(error)
 
 
 @dp.callback_query_handler(Text(startswith='answer:'), state=None)

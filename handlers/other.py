@@ -1,5 +1,6 @@
 import asyncio
 
+import functions.other_func
 import handlers.submit_request
 from create_bot import bot, dialogflow, session_client, session, language_code
 # import json # Работа с json файлами, тут нужен для фильтра мата
@@ -25,7 +26,7 @@ __all__ = ['registration_handlers_other']
 
 
 async def command_test(message: types.Message):
-    """Функция регистрации Хендлеров, при этом декораторы не нужны
+    """Тест функция
 
     :return:
     """
@@ -37,22 +38,23 @@ async def command_test(message: types.Message):
         if message.from_user.id != 541261735 and message.from_user.id != 411787402:
             logger.info(f'{await get_date_time()} Пользователь {user} нажал на ТЕСТ')
             await message.delete()
-            temp1 = await send_msg(message, '⚠️У Вас нет доступа к тестированию⚠️',
-                                   spec_chat_id=message.from_user.id)
-            temp = await send_msg(message, '🙄', rm=None, spec_chat_id=message.from_user.id)
+            msg2 = await send_msg(message, '⚠️У Вас нет доступа к тестированию⚠️',
+                                  spec_chat_id=message.from_user.id)
+            msg1 = await send_msg(message, '🙄', rm=None, spec_chat_id=message.from_user.id)
             await asyncio.sleep(2.5)
-            temp2 = await bot.edit_message_text(chat_id=message.from_user.id,
-                                                message_id=temp.message_id,
-                                                text='🤭')
+            msg3 = await bot.edit_message_text(chat_id=message.from_user.id,
+                                               message_id=msg1.message_id,
+                                               text='🤭')
             await asyncio.sleep(2.8)
             await bot.edit_message_text(chat_id=message.from_user.id,
-                                        message_id=temp.message_id,
+                                        message_id=msg1.message_id,
                                         text='🥱')
             await asyncio.sleep(3)
-            await bot.delete_message(message.from_user.id, temp2.message_id)
+            await bot.delete_message(message.from_user.id, msg3.message_id)
             await asyncio.sleep(5)
-            await bot.delete_message(message.from_user.id, temp1.message_id)
+            await bot.delete_message(message.from_user.id, msg2.message_id)
         else:
+            print(type(await functions.other_func.get_user_name(message)))
             pass
     except Exception as err:
         logger.error('Ошибка теста', err)
@@ -86,8 +88,8 @@ async def send_text_private(message: types.Message):
         return
     # Фильтр матов
     text = await censure_filter(message.text)
-    temp = await find_column('users', 'telegram_id', message.from_user.id)
-    telegram_id = await data_from_database_row(temp, 0)
+    users_data = await find_column('users', 'telegram_id', message.from_user.id)
+    telegram_id = await data_from_database_row(users_data, 0)
 
     if not telegram_id:
         await registration(message)
@@ -120,7 +122,6 @@ async def send_text_private(message: types.Message):
     #                 f'есть вопрос \"{message.text}\"')
     response = session_client.detect_intent(  # Ответ бота
         session=session, query_input=query_input)
-
 
     # kb = create_button_inline(2, t1='Да', с1=f'b_ans:yes:{question_id}:{callback.message.chat.id}',
     #                           t2='Нет', c2=f'b_ans:no:{question_id}:{callback.message.chat.id}')
@@ -159,6 +160,7 @@ def registration_handlers_other(_dp: Dispatcher):
     :param _dp:
     :return:
     """
+    _dp.register_message_handler(command_test, commands=['test'])
     _dp.register_message_handler(send_text_private,
                                  ChatTypeFilter(chat_type=types.ChatType.PRIVATE),
                                  content_types=['text'])  # Должна быть в самом конце. Обрабатывает сообщения в личку

@@ -249,6 +249,7 @@ async def load_text(message: types.Message, state: FSMContext):
         await bot.send_media_group(message.from_user.id, media=doc)
     msg = await send_msg(message, '.')
     await msg.delete()
+
     await send_msg(message, f'Ваш вопрос:\n{message.text}')
 
     kb = create_button_inline(2, t1='Очистить',
@@ -356,8 +357,8 @@ async def cm_cancel(callback: types.CallbackQuery, state: FSMContext):
 async def call_ok(callback: types.CallbackQuery):
     question_id = int(callback.data.split(':')[1])
     user_id = int(callback.data.split(':')[2])
-    temp = await find_column('delete_msg', 'question_id', question_id)
-    msg = temp[0][1].split('|')
+    delete_msg_data = await find_column('delete_msg', 'question_id', question_id)
+    msg = delete_msg_data[0][1].split('|')
     user_name = await get_user_name(callback.message, id_user=callback.message.chat.id)
     logger.info(f'{await get_date_time()} - {user_name} принял заявку №{question_id}')
     for data in msg:
@@ -366,7 +367,7 @@ async def call_ok(callback: types.CallbackQuery):
             text = f'{user_name} принял заявку №{question_id}'
             await edit_msg(res[0], res[1], text)
         else:
-            kb = create_button_inline(2, t1='Ответить на вопрос', с2=f'work:{question_id}:{user_id}:{res[1]}')
+            kb = create_button_inline(2, t1='Ответить на вопрос', с1=f'work:{question_id}:{user_id}:{res[1]}')
             # kb = create_button_inline(2, t1='Отработал', с2=f'work:{question_id}:{user_id}:{res[1]}',
             #                           t2='Отказать', c2=f'rej:{question_id}:{user_id}:{res[1]}')
             text = f'Вы приняли заявку №{question_id}'
